@@ -1,61 +1,53 @@
-import datetime
-from typing import Annotated, Optional
-from sqlalchemy import Column
-from sqlalchemy import Table, Column, Integer, String, MetaData, BigInteger, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.testing.schema import mapped_column
-from DataBases import Base, str_50
-import bcrypt
-# int_prinmary_key = Annotated[int, mapped_column(primary_key=True)]
+from __future__ import annotations
+from sqlalchemy import String, ForeignKey, Text, DateTime, func, UniqueConstraint, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from DataBases import Base
 
 class UsersOrm(Base):
-    __tablename__ = 'users'
+    __tablename__ = "users"
+
     id: Mapped[int] = mapped_column(primary_key=True)
-    login: Mapped[str] = mapped_column(unique=True)
-    name: Mapped[str] = mapped_column()
-    surname: Mapped[str] = mapped_column()
-    password_hash: Mapped[str] = mapped_column()
+    login: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    surname: Mapped[str] = mapped_column(String(50), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(100), nullable=False)
 
-    def __repr__(self):
-        return f"[{self.id}, '{self.name}', '{self.surname}', '{self.password}']"
+    messages: Mapped[list[MessagesOrm]] = relationship(back_populates="author", cascade="all, delete-orphan")
 
-    def __getitem__(self, index):
-        return [self.id, self.name, self.surname, self.password_hash][index]
-
-    def __len__(self):
-        return 4
+    __table_args__ = (
+        Index("ix_users_name_surname", "name", "surname"),
+    )
 
 class ChatsOrm(Base):
-    __tablename__ = 'chats'
+    __tablename__ = "chats"
+
     id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[str_50]
-    first_user_id: Mapped[int] = mapped_column(ForeignKey("users.id")) # добавить бы ondelete='CSCADE'
-    second_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
 
-    def __repr__(self):
-        return f"[{self.id}, '{self.title}', '{self.first_user_id}', '{self.second_user_id}']"
+    first_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    second_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
 
-    def __getitem__(self, index):
-        return [self.id, self.title, self.first_user_id, self.second_user_id][index]
+    messages: Mapped[list[MessagesOrm]] = relationship(back_populates="chat", cascade="all, delete-orphan")
 
-    def __len__(self):
-        return 4
+    __table_args__ = (
+        UniqueConstraint("first_user_id", "second_user_id", name="uq_chat_pair"),
+    )
 
 class MessagesOrm(Base):
-    __tablename__ = 'messages'
-    id = Column(BigInteger, primary_key=True)
-    chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id"))
-    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    text: Mapped[str] = mapped_column()
-    created_when: Mapped[str] = mapped_column()
+    __tablename__ = "messages"
 
-    def __repr__(self):
-        return f"[{self.created_when}, '{self.chat_id}', '{self.sender_id}', '{self.text}']"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # совместимость со старым подходом
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
-    def __getitem__(self, index):
-        return [self.created_when, self.chat_id, self.sender_id, self.text][index]
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    def __len__(self):
-        return 4
+    chat: Mapped[ChatsOrm] = relationship(back_populates="messages")
+    author: Mapped[UsersOrm] = relationship(back_populates="messages")
 
-metadata_obj = MetaData()
+    __table_args__ = (
+        Index("ix_messages_chat_id_created", "chat_id", "created_at"),
+    )

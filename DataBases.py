@@ -1,35 +1,24 @@
 from typing import Annotated
-import asyncio
-from sqlalchemy import Table, Column, Integer, String, MetaData, BigInteger, ForeignKey
+from sqlalchemy import String
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import URL, text
 from Config import settings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
-async_engine = create_async_engine(
-    url=settings.DATABASE_URL_asyncpg,
-    # echo=True
-)
-async_session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
-
-str_50 = Annotated[str, 50]
+from contextlib import asynccontextmanager
 
 class Base(DeclarativeBase):
-    type_annotation_map = {
-        str_50: String(50)
-    }
+    pass
 
-def connection(method):
-    async def wrapper(*args, **kwargs):
-        async with async_session_maker() as session:
-            try:
-                # Явно не открываем транзакции, так как они уже есть в контексте
-                return await method(*args, session=session, **kwargs)
-            except Exception as e:
-                await session.rollback()  # Откатываем сессию при ошибке
-                raise e  # Поднимаем исключение дальше
-            finally:
-                await session.close()  # Закрываем сессию
+engine = create_async_engine(settings.DATABASE_URL_asyncpg, echo=False)
+async_session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-    return wrapper
+@asynccontextmanager
+async def session_scope():
+    async with async_session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

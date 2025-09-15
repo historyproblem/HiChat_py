@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
 
 class Settings(BaseSettings):
     # здесь были попытки аккуратной передачи данных, в частности взятие параметров подключения из .env, но им не суждено
@@ -10,7 +9,7 @@ class Settings(BaseSettings):
     DB_PASS: str = '123456'
     DB_NAME: str = 'postgres'
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property
     def DATABASE_URL_asyncpg(self):

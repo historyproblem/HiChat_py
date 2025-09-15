@@ -1,106 +1,77 @@
-import sys
-from random import randrange
-from PyQt6 import QtWidgets, QtCore
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QScrollArea, QLabel, QFrame
+from PyQt6.QtCore import Qt
+from DatabaseModels import MessagesOrm
+from ORM import AsyncORM
+from qasync import asyncSlot
 
-class LogWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+class MessageBubble(QFrame):
+    def __init__(self, text: str, is_own: bool):
         super().__init__()
-        self.setWindowTitle('HiChatLog')
-        self.layout = QtWidgets.QVBoxLayout()
-        self.setLayout(self.layout)
-        self.btn = QtWidgets.QRadioButton()
-        self.layout.addWidget(self.btn)
+        self.setObjectName("bubble")
+        self.setStyleSheet(
+        "#bubble {border-radius: 12px; padding: 8px 12px; background: %s;}" % ("#DCF8C6" if is_own else "#FFFFFF")
+        )
+        lay = QVBoxLayout(self)
+        lbl = QLabel(text)
+        lbl.setWordWrap(True)
+        lay.addWidget(lbl)
+        lay.setContentsMargins(10, 6, 10, 6)
 
-
-
-class WrapLabel(QtWidgets.QTextEdit):
-    def __init__(self, text=''):
-        super().__init__(text)
-        self.setStyleSheet('''
-            WrapLabel {
-                border: 1px outset palette(dark);
-                border-radius: 8px;
-                background: palette(light);
-            }
-        ''')
-        self.setReadOnly(True)
-        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
-                           QtWidgets.QSizePolicy.Policy.Maximum)
-
-        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.textChanged.connect(self.updateGeometry)
-
-    def minimumSizeHint(self):
-        doc = self.document().clone()
-        doc.setTextWidth(self.viewport().width())
-        height = doc.size().height()
-        height += self.frameWidth() * 2
-        return QtCore.QSize(150, int(height) - 100)
-
-    def sizeHint(self):
-        return self.minimumSizeHint()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.updateGeometry()
-
-
-class ChatTest(QtWidgets.QScrollArea):
-    def __init__(self):
+class ChatWindow(QWidget):
+    def __init__(self, user_id: int, chat_id: int):
         super().__init__()
-
-        container = QtWidgets.QWidget()
-        self.setMinimumSize(250, 250)
-        self.setWidget(container)
-        self.setWidgetResizable(True)
-
-        layout = QtWidgets.QVBoxLayout(container)
-        layout.addStretch()
-        self.resize(480, 360)
-
-        for i in range(1, 11):
-            QtCore.QTimer.singleShot(1000 * i, lambda i=i:
-            self.addMessage('1' * randrange(70, 350), i)
-                                     )
-
-    def addMessage(self, text, i):
-        wrapLabel = WrapLabel(text)
-        if i % 2:
-            wrapLabel.setStyleSheet('''
-                WrapLabel {
-                    border: 1px outset palette(dark);
-                    border-radius: 8px;
-                    background: palette(light);
-                    margin-left: 50px;
-                    background: #FFFEB7;
-                }
-            ''')
-        else:
-            wrapLabel.setStyleSheet('''
-                WrapLabel {
-                    border: 1px outset palette(dark);
-                    border-radius: 8px;
-                    background: palette(light);
-                    margin-right: 50px;
-                    background: #C8E6F5;
-                    color: #6D3939;
-                }
-            ''')
-
-        self.widget().layout().addWidget(wrapLabel)
-        QtCore.QTimer.singleShot(0, self.scrollToBottom)
-
-    def scrollToBottom(self):
-        QtWidgets.QApplication.processEvents()
-        self.verticalScrollBar().setValue(
-            self.verticalScrollBar().maximum())
+        self.user_id = user_id
+        self.chat_id = chat_id
 
 
-if __name__ == "__main__":
-    app = QtWidgets.QApplication(sys.argv)
-    w = ChatTest()
-    ll = LogWindow()
-    ll.show()
-    w.show()
-    sys.exit(app.exec())
+        self.setWindowTitle("HiChat — Chat")
+
+
+        self.root = QVBoxLayout(self)
+
+
+        # scroll area for messages
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll_widget = QWidget()
+        self.scroll_lay = QVBoxLayout(self.scroll_widget)
+        self.scroll_lay.addStretch(1)
+        self.scroll.setWidget(self.scroll_widget)
+
+
+        # input area
+        in_lay = QHBoxLayout()
+        self.inp = QLineEdit()
+        self.btn = QPushButton("Send")
+        self.btn.clicked.connect(self.on_send_clicked)
+        in_lay.addWidget(self.inp)
+        in_lay.addWidget(self.btn)
+
+
+        self.root.addWidget(self.scroll)
+        self.root.addLayout(in_lay)
+
+    async def load_history(self):
+        msgs = await AsyncORM.list_messages(self.chat_id, limit=100)
+        for m in msgs:
+            self._add_bubble(m)
+        self._scroll_to_bottom()
+    
+    def _add_bubble(self, msg: MessagesOrm):
+        is_own = (msg.author_id == self.user_id)
+        bubble = MessageBubble(msg.text, is_own)
+        self.scroll_lay.insertWidget(self.scroll_lay.count() - 1, bubble, 0, Qt.AlignmentFlag.AlignLeft if not is_own else Qt.AlignmentFlag.AlignRight)
+
+    def _scroll_to_bottom(self):
+        sb = self.scroll.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+    @asyncSlot()
+    async def on_send_clicked(self):
+        txt = self.inp.text().strip()
+        if not txt:
+            return
+        msg = await AsyncORM.add_message(self.chat_id, self.user_id, txt)
+        self._add_bubble(msg)
+        self.inp.clear()
+        self._scroll_to_bottom()
