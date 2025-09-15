@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QScrollArea, QLabel, QFrame
 from PyQt6.QtCore import Qt
-from DatabaseModels import MessagesOrm
-from ORM import AsyncORM
+from core.ORM import AsyncORM
+from core.DatabaseModels import MessagesOrm
 from qasync import asyncSlot
 
 class MessageBubble(QFrame):

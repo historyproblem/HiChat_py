@@ -1,8 +1,8 @@
 from typing import Optional
 from sqlalchemy import select, or_, and_
 from sqlalchemy.exc import IntegrityError
-from DataBases import session_scope, engine, Base
-from DatabaseModels import UsersOrm, MessagesOrm, ChatsOrm
+from core.DataBases import session_scope, engine, Base
+from core.DatabaseModels import UsersOrm, MessagesOrm, ChatsOrm
 import bcrypt
 from datetime import datetime, timezone
 

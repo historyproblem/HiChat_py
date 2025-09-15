@@ -2,8 +2,8 @@ import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox
 from qasync import QEventLoop, asyncSlot
 import asyncio
-from ORM import AsyncORM
-from ChatWindow import ChatWindow
+from app.windows.ChatWindow import ChatWindow
+from core.ORM import AsyncORM
 
 ########################################################################################################################
 ########################################################################################################################
